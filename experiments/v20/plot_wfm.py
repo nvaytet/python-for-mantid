@@ -1,26 +1,18 @@
 from __future__ import division, print_function
 import numpy as np
 import matplotlib.pyplot as plt
-# from scipy import signal
 from scipy.ndimage import gaussian_filter1d
-# from scipy.optimize import curve_fit
 from matplotlib.patches import Rectangle
 
 
-
-
-
-
-# # %load ./../functions/detect_peaks.py
+# Peak detection routine by Marcos Duarte
+#
 # """Detect peaks in data based on their amplitude and other features."""
 #
-# import numpy as np
 #
 # __author__ = "Marcos Duarte, https://github.com/demotu/BMC"
 # __version__ = "1.0.5"
 # __license__ = "MIT"
-
-
 def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
                  kpsh=False, valley=False, show=False, ax=None):
 
@@ -169,24 +161,6 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 
     return ind
 
-# Gaussian function
-def func(x, a, x0, sigma):
-    return a*np.exp(-(x-x0)**2/(2*sigma**2))
-
-
-
-def find_peaks(y):
-    # Find valleys using `detect_peaks` function from Marcos Duarte
-    peaks = detect_peaks(y, mpd=mpd, valley=True)
-    # Now filter out peaks that are between start and end
-    good_peaks = [i_start]
-    for p in peaks:
-        if (p > i_start+mpd) and (p < i_end-mpd):
-            good_peaks.append(p)
-    good_peaks.append(i_end)
-    return good_peaks
-
-
 ################################################################################
 ################################################################################
 ################################################################################
@@ -194,21 +168,26 @@ def find_peaks(y):
 # PARAMETERS ############
 nwindows = 6
 bg_threshold = 0.05
-win_threshold = 0.05
+win_threshold = 0.3
 plot = True
+gsmooth = None
 #########################
 
-data = np.loadtxt('spectrum.txt')
+data = np.loadtxt('spectrum2.txt')
 nx = np.shape(data)[0]
 
-fig = plt.figure()
-ax = fig.add_subplot(111)
-# ax2 = fig.add_subplot(212)
-
+if plot:
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
 
 
 x = data[:,0]*1000.0
-y = gaussian_filter1d(data[:,1], 10)
+# Smooth the data with a gaussian filter
+if gsmooth is None:
+    gsmooth = max(int(nx/500),1)
+y = gaussian_filter1d(data[:,1], gsmooth)
+
+# Find min and max values
 ymin = np.amin(y)
 ymax = np.amax(y)
 
@@ -248,20 +227,20 @@ for i in range(nx-nmin,1,-1):
 # edges divided by 6 (but slightly less to be on the safe side).
 # Note that for the `detect_peaks` function, mpd is in units of data index, not
 # time-of-flight.
-# y = gaussian_filter1d(y, 10)
 mpd = int(0.75 * float(i_end - i_start) / nwindows)
 print("The minimum peak distance (mpd) is:",mpd)
-good_peaks = find_peaks(y)
+# Find valleys using `detect_peaks` function from Marcos Duarte
+peaks = detect_peaks(y, mpd=mpd, valley=True)
+# Now filter out peaks that are between start and end
+good_peaks = [i_start]
+for p in peaks:
+    if (p > i_start+mpd) and (p < i_end-mpd):
+        good_peaks.append(p)
+good_peaks.append(i_end)
+return good_peaks
 print("Number of valleys found:",len(good_peaks)-2)
 if (len(good_peaks)-2) != (nwindows - 1):
     print("Error: number of valleys should be %i!" % (nwindows-1))
-    # print("Trying with a gaussian smoothing")
-    # y = gaussian_filter1d(y, 10)
-    # good_peaks = find_peaks(y)
-
-
-
-
 
 
 # Now for each valley, iterate to one side starting from the valley center and
@@ -279,23 +258,25 @@ ledges = [i_start]
 redges = []
 
 for p in range(1,len(good_peaks)-1):
-    ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='k')
+    # ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='k')
 
     # Towards the right ===================
     rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
-    ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime')
+    if plot:
+        ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime', lw=2)
     # Find left edge iterating towards the right
-    for i in range(good_peaks[p],good_peaks[p+1]):
-        if y[i] >= (win_threshold*rmean):
+    for i in range(good_peaks[p]+1,good_peaks[p+1]):
+        if (y[i] - y[good_peaks[p]]) >= (win_threshold*(rmean-y[good_peaks[p]])):
             ledges.append(i)
             break
 
     # Towards the left =======================
     lmean = np.average(y[good_peaks[p-1]:good_peaks[p]])
-    ax.plot([x[good_peaks[p-1]],x[good_peaks[p]]],[lmean,lmean],color='lime')
+    if plot:
+        ax.plot([x[good_peaks[p-1]],x[good_peaks[p]]],[lmean,lmean],color='lime', lw=2)
     # Find left edge iterating towards the right
-    for i in range(good_peaks[p],good_peaks[p-1],-1):
-        if y[i] >= (win_threshold*lmean):
+    for i in range(good_peaks[p]-1,good_peaks[p-1],-1):
+        if (y[i] - y[good_peaks[p]]) >= (win_threshold*(lmean-y[good_peaks[p]])):
             redges.append(i)
             break
 
@@ -309,11 +290,19 @@ for i in range(len(ledges)):
 
 
 if plot:
+    colors = ["r","g","b","magenta","cyan","orange"]
     for i in range(len(ledges)):
-        ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor="C{}".format(i), alpha=0.5))
-    for p in good_peaks:
-        ax.plot(x[p], y[p], 'o', color='r')
-    ax.plot(x, y, color="k")
+        ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor=colors[i], alpha=0.5))
+    ax.plot(x, data[:,1], color="k", lw=2, label="Raw data")
+    ax.plot(x, y, color="lightgrey", lw=1, label="Smoothed data")
+    for p in range(1,len(good_peaks)-1):
+        ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='r')
+    ax.plot(x[good_peaks[0]], y[good_peaks[0]], 'o', color="deepskyblue", label="Leading edge")
+    ax.plot(x[good_peaks[-1]], y[good_peaks[-1]], 'o', color="yellow", label="Trailing edge")
     ax.set_xlabel("Time-of-flight")
     ax.set_ylabel("Amplitude")
+    ax.set_ylim([0.0,1.05*np.amax(data[:,1])])
+    ax.plot(x[good_peaks[0]], -ymax, 'o', color='r',label="Valleys")
+    ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
+    ax.legend(loc=(0,1.02),ncol=3, fontsize=10)    
     fig.savefig('figure.pdf',bbox_inches='tight')
