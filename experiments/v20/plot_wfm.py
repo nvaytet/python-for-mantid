@@ -1,9 +1,10 @@
 from __future__ import division, print_function
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import signal
+# from scipy import signal
 from scipy.ndimage import gaussian_filter1d
-from scipy.optimize import curve_fit
+# from scipy.optimize import curve_fit
+from matplotlib.patches import Rectangle
 
 
 
@@ -173,52 +174,60 @@ def func(x, a, x0, sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
 
-# from scipy import signal
-# xs = np.arange(0, np.pi, 0.05)
-# data = np.sin(xs)
-# peakind = signal.find_peaks_cwt(data, np.arange(1,10))
-# peakind, xs[peakind], data[peakind]
+
+def find_peaks(y):
+    # Find valleys using `detect_peaks` function from Marcos Duarte
+    peaks = detect_peaks(y, mpd=mpd, valley=True)
+    # Now filter out peaks that are between start and end
+    good_peaks = [i_start]
+    for p in peaks:
+        if (p > i_start+mpd) and (p < i_end-mpd):
+            good_peaks.append(p)
+    good_peaks.append(i_end)
+    return good_peaks
 
 
-data = np.loadtxt('spectrum2.txt')
+################################################################################
+################################################################################
+################################################################################
+
+# PARAMETERS ############
+nwindows = 6
+bg_threshold = 0.05
+win_threshold = 0.05
+plot = True
+#########################
+
+data = np.loadtxt('spectrum.txt')
 nx = np.shape(data)[0]
-print(nx)
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
 # ax2 = fig.add_subplot(212)
 
-mpd = 40
-
-lines = [18454,27522, 28645,37670,38836,46479,
-         47731,54510, 56324,62680,64485,68890]
 
 
 x = data[:,0]*1000.0
-y = data[:,1]
+y = gaussian_filter1d(data[:,1], 10)
+ymin = np.amin(y)
 ymax = np.amax(y)
 
 
-# peakind = detect_peaks(y, mph=500, mpd=500, valley=True)
-peaks = detect_peaks(y, mpd=mpd, valley=True)
-
-print("Number of peask found:",len(peaks))
-
-mean = np.average(y)
-
-print(np.average(y))
-
-# Find leading and trailing edges
-# threshold = np.average(y) / 2.0
-threshold = 0.1
-nmin = int(nx/50) # 100
-
-
-print(nmin)
+# Find leading and trailing edges:
+#
+# Take the first `nmin` points starting from the left and compute a mean.
+# This is the starting point for background.
+# Then iterate towards the right. If the y value is higher than
+# `threshold * (ymax - mean_background)` then this is the leading edge; if not
+# the value is added to the background and we move to the next point.
+#
+# For the trailing edge, the same procedure is started from the right end and
+# we iterate towards the left.
+nmin = int(nx/50)
 # Find leading background
 background = y[0:nmin]
 for i in range(nmin,nx):
-    if y[i] > threshold*(ymax - np.average(background)):
+    if y[i] > bg_threshold*(ymax - np.average(background)):
         i_start = i
         break
     else:
@@ -226,200 +235,85 @@ for i in range(nmin,nx):
 # Find trailing background
 background = y[-nmin-1:-1]
 for i in range(nx-nmin,1,-1):
-    if y[i] > threshold*(ymax - np.average(background)):
+    if y[i] > bg_threshold*(ymax - np.average(background)):
         i_end = i
         break
     else:
         np.append(background,y[i])
 
-# for i in range(nx):
-#     if y[i] > threshold:
-#         i_start = i
-#         break
-# for i in range(nx-1,1,-1):
-#     if y[i] > threshold:
-#         i_end = i
-#         break
-
-# Now filter out peaks that are between start and end
-good_peaks = [i_start]
-for p in peaks:
-    if (p > i_start+mpd) and (p < i_end-mpd):
-        good_peaks.append(p)
-good_peaks.append(i_end)
-
-
-
-# Average peak distance
-dist = 0.0
-for p in range(len(good_peaks)-1):
-    dist += x[good_peaks[p+1]] - x[good_peaks[p]]
-dist /= float(len(good_peaks)-1)
-
-print("average dist",dist)
-
-dist /= 8.0
-
-# ax.plot(x[nmin],y[nmin],'o')
-
-
-y2 = gaussian_filter1d(y, 10)
-# peakind2 = detect_peaks(y2, mpd=500, valley=True)
+# Determine minimum peak distance (mpd):
+# We know there should be 6 windows between the leading and trailing edges.
+# Since the windows have approximately all the same size, we can estimate a
+# minimum peak distance to be close to the distance between leading and trailing
+# edges divided by 6 (but slightly less to be on the safe side).
+# Note that for the `detect_peaks` function, mpd is in units of data index, not
+# time-of-flight.
+# y = gaussian_filter1d(y, 10)
+mpd = int(0.75 * float(i_end - i_start) / nwindows)
+print("The minimum peak distance (mpd) is:",mpd)
+good_peaks = find_peaks(y)
+print("Number of valleys found:",len(good_peaks)-2)
+if (len(good_peaks)-2) != (nwindows - 1):
+    print("Error: number of valleys should be %i!" % (nwindows-1))
+    # print("Trying with a gaussian smoothing")
+    # y = gaussian_filter1d(y, 10)
+    # good_peaks = find_peaks(y)
 
 
 
 
 
 
+# Now for each valley, iterate to one side starting from the valley center and
+# find the window edge. We start from the first valley, which is the second
+# element of the `good_peaks` array because the first is the global leading
+# edge.
+# We first iterate towards the right, to find the leading edge of the next
+# window.
+# The mean y value between this valley and the next one (`mean`) is computed.
+# The window edge is the first value that exceeds the a fraction of the mean:
+# `y > win_threshold * mean`.
 
-#
-# y2 = gaussian_filter1d(y, 5)
-#
-# # ax.plot(x, y)
-# # ax.plot(x, y2,color='k')
-#
-# y3 = -y2 + 800
-#
-#
-# peakind = signal.find_peaks_cwt(y3, np.arange(180,200))
-#
-# print(np.arange(1000,5000,100))
-
-# y = -y + np.amax(y)
-
-ax.plot(x, y)
-# ax.plot(x, y2)
-ax.plot([x[i_start],x[i_start]],[0,ymax],color='r')
-ax.plot([x[i_end],x[i_end]],[0,ymax],color='r')
-# ax.plot(x, y2)
-
-grady = np.abs(np.gradient(y2))
-# ax2.semilogy(x, np.abs(y3))
-
-
-# z = y[:]
-width = 10
-
+# Define left and right window edges
 ledges = [i_start]
 redges = []
 
 for p in range(1,len(good_peaks)-1):
-    # x1 = x[p-pwidth]
-    # x2 = x[p+pwidth]
-    # y1 = y[p-pwidth]
-    # y2 = y[p+pwidth]
-    # grad = (y2-y1)/(x2-x1)
-    # for i in range(p-pwidth+1,p+pwidth):
-    #     z[i] = y1 + grad * (x[i] - x1)
-    # ax.plot(x[p], y[p], 'o', color='k')
     ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='k')
 
-    # for j in range()
-
-    # w1 = int((good_peaks[p] - good_peaks[p-1]) / width)
-    # w2 = int((good_peaks[p+1] - good_peaks[p]) / width)
-    #
-    x1 = int(0.5*(good_peaks[p]+good_peaks[p-1]))
-    x2 = int(0.5*(good_peaks[p]+good_peaks[p+1]))
-    # # print(x[x1:x2])
-    # # print(y[x1:x2])
-
     # Towards the right ===================
-
-    # Find start of average window
-    for j in range(good_peaks[p],good_peaks[p+1]):
-        if abs(x[j] - x[good_peaks[p]]) > dist:
-            iav1 = j
-            break
-    # Find end of average window
-    for j in range(good_peaks[p+1],good_peaks[p],-1):
-        if abs(x[j] - x[good_peaks[p+1]]) > dist:
-            iav2 = j
-            break
-    # Find start of iteration
-    for j in range(good_peaks[p],good_peaks[p+1]):
-        if abs(x[j] - x[good_peaks[p]]) > 0.5*dist:
-            iter_start = j
-            break
-
-
-    mean2 = np.average(y2[iav1:iav2])
-    print("MEAN2 is", mean2)
-    for j in range(iter_start,x2):
-        if (np.abs(y[j] - mean2)/mean2 < 0.05) and grady[j] < 0.5:
-            # ax.plot([x[j],x[j]],[0,800],color='lime')
-            ledges.append(j)
+    rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
+    ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime')
+    # Find left edge iterating towards the right
+    for i in range(good_peaks[p],good_peaks[p+1]):
+        if y[i] >= (win_threshold*rmean):
+            ledges.append(i)
             break
 
     # Towards the left =======================
-
-    # Find start of average window
-    for j in range(good_peaks[p-1],good_peaks[p]):
-        if abs(x[j] - x[good_peaks[p-1]]) > dist:
-            iav1 = j
-            break
-    # Find end of average window
-    for j in range(good_peaks[p],good_peaks[p-1],-1):
-        if abs(x[j] - x[good_peaks[p]]) > dist:
-            iav2 = j
-            break
-    # Find start of iteration
-    for j in range(good_peaks[p],good_peaks[p-1],-1):
-        if abs(x[j] - x[good_peaks[p]]) > 0.5*dist:
-            iter_start = j
+    lmean = np.average(y[good_peaks[p-1]:good_peaks[p]])
+    ax.plot([x[good_peaks[p-1]],x[good_peaks[p]]],[lmean,lmean],color='lime')
+    # Find left edge iterating towards the right
+    for i in range(good_peaks[p],good_peaks[p-1],-1):
+        if y[i] >= (win_threshold*lmean):
+            redges.append(i)
             break
 
-    mean1 = np.average(y2[iav1:iav2])
-    print("MEAN1 is", mean1)
-    for j in range(iter_start,x1,-1):
-        if (np.abs(y[j] - mean1)/mean1 < 0.05) and grady[j] < 0.5:
-            # ax.plot([x[j],x[j]],[0,800],color='cyan')
-            redges.append(j)
-            break
 
+# Remember to append the global trailing edge
 redges.append(i_end)
 
-
-colors = ['r','g','k','magenta','cyan','purple']
-
+print("The frame boundaries are the following:")
 for i in range(len(ledges)):
-    ax.plot([x[ledges[i]],x[ledges[i]]],[0,800],color=colors[i])
-    ax.plot([x[redges[i]],x[redges[i]]],[0,800],color=colors[i])
+    print('{} --> {}'.format(x[ledges[i]],x[redges[i]]))
 
 
-
-    #     grad = (y2[j+w2] - y2[j]) / (x[j+w2] - x[j])
-    #     if grad
-
-    # yy = y[x1:x2] - np.amin(y[x1:x2])
-    # popt, pcov = curve_fit(func, x[x1:x2], yy, p0 = [np.amax(yy),x[good_peaks[p]],0.5*(x[x1]+x[x2])])
-    # print(popt)
-    # ym = func(x[x1:x2], popt[0], popt[1], popt[2])
-    # ax.plot(x[x1:x2], yy, c='grey')
-    # ax.plot(x[x1:x2], ym, c='r')
-    # break
-
-
-
-# #popt returns the best fit values for parameters of the given model (func)
-# print popt
-#
-# ym = func(x, popt[0], popt[1], popt[2])
-# ax.plot(x, ym, c='r', label='Best fit')
-# ax.legend()
-
-
-# for p in peakind2:
-#     ax.plot(x[p], y2[p], 'o', color='r')
-
-# ax.plot(x, z, color='magenta')
-
-
-w = signal.savgol_filter(y, 101, 2)
-# ax.plot(x, w, color='lime')
-
-
-# for i in lines:
-#     ax.plot([i,i],[0,800],color='red')
-
-fig.savefig('figure.pdf',bbox_inches='tight')
+if plot:
+    for i in range(len(ledges)):
+        ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor="C{}".format(i), alpha=0.5))
+    for p in good_peaks:
+        ax.plot(x[p], y[p], 'o', color='r')
+    ax.plot(x, y, color="k")
+    ax.set_xlabel("Time-of-flight")
+    ax.set_ylabel("Amplitude")
+    fig.savefig('figure.pdf',bbox_inches='tight')
