@@ -165,144 +165,160 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 ################################################################################
 ################################################################################
 
-# PARAMETERS ############
-nwindows = 6
-bg_threshold = 0.05
-win_threshold = 0.3
-plot = True
-gsmooth = None
-#########################
-
-data = np.loadtxt('spectrum2.txt')
-nx = np.shape(data)[0]
-
-if plot:
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-
-x = data[:,0]*1000.0
-# Smooth the data with a gaussian filter
-if gsmooth is None:
-    gsmooth = max(int(nx/500),1)
-y = gaussian_filter1d(data[:,1], gsmooth)
-
-# Find min and max values
-ymin = np.amin(y)
-ymax = np.amax(y)
-
-
-# Find leading and trailing edges:
+# Get the left and right edges of wave-frame multiplication windows.
 #
-# Take the first `nmin` points starting from the left and compute a mean.
-# This is the starting point for background.
-# Then iterate towards the right. If the y value is higher than
-# `threshold * (ymax - mean_background)` then this is the leading edge; if not
-# the value is added to the background and we move to the next point.
+# The parameters are:
 #
-# For the trailing edge, the same procedure is started from the right end and
-# we iterate towards the left.
-nmin = int(nx/50)
-# Find leading background
-background = y[0:nmin]
-for i in range(nmin,nx):
-    if y[i] > bg_threshold*(ymax - np.average(background)):
-        i_start = i
-        break
-    else:
-        np.append(background,y[i])
-# Find trailing background
-background = y[-nmin-1:-1]
-for i in range(nx-nmin,1,-1):
-    if y[i] > bg_threshold*(ymax - np.average(background)):
-        i_end = i
-        break
-    else:
-        np.append(background,y[i])
+# - filename: the text file to read containing the data
+#
+# - nwindows: the number of pulse windows (6 by default)
+#
+# - bg_threshold: the percentage above which y values are no longer considered
+#                 as background
+#
+# - win_threshold: the minimum percentage of window average to each when
+#                  searching for window edges
+#
+# - plot: plot figure if True
+#
+# - gsmooth: width of gaussian Kernel to smooth the data with. If gmsooth = 0
+#            (its default value), then a guess is performed based on the number
+#            of data points. If it is set to `None` then no smoothing is
+#            performed.
+#
+def get_wfm_windows(filename=None, nwindows=6, bg_threshold=0.05,
+                    win_threshold=0.3, plot=True, gsmooth=0):
 
-# Determine minimum peak distance (mpd):
-# We know there should be 6 windows between the leading and trailing edges.
-# Since the windows have approximately all the same size, we can estimate a
-# minimum peak distance to be close to the distance between leading and trailing
-# edges divided by 6 (but slightly less to be on the safe side).
-# Note that for the `detect_peaks` function, mpd is in units of data index, not
-# time-of-flight.
-mpd = int(0.75 * float(i_end - i_start) / nwindows)
-print("The minimum peak distance (mpd) is:",mpd)
-# Find valleys using `detect_peaks` function from Marcos Duarte
-peaks = detect_peaks(y, mpd=mpd, valley=True)
-# Now filter out peaks that are between start and end
-good_peaks = [i_start]
-for p in peaks:
-    if (p > i_start+mpd) and (p < i_end-mpd):
-        good_peaks.append(p)
-good_peaks.append(i_end)
-return good_peaks
-print("Number of valleys found:",len(good_peaks)-2)
-if (len(good_peaks)-2) != (nwindows - 1):
-    print("Error: number of valleys should be %i!" % (nwindows-1))
+    data = np.loadtxt(filename)
+    nx = np.shape(data)[0]
 
-
-# Now for each valley, iterate to one side starting from the valley center and
-# find the window edge. We start from the first valley, which is the second
-# element of the `good_peaks` array because the first is the global leading
-# edge.
-# We first iterate towards the right, to find the leading edge of the next
-# window.
-# The mean y value between this valley and the next one (`mean`) is computed.
-# The window edge is the first value that exceeds the a fraction of the mean:
-# `y > win_threshold * mean`.
-
-# Define left and right window edges
-ledges = [i_start]
-redges = []
-
-for p in range(1,len(good_peaks)-1):
-    # ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='k')
-
-    # Towards the right ===================
-    rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
     if plot:
-        ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime', lw=2)
-    # Find left edge iterating towards the right
-    for i in range(good_peaks[p]+1,good_peaks[p+1]):
-        if (y[i] - y[good_peaks[p]]) >= (win_threshold*(rmean-y[good_peaks[p]])):
-            ledges.append(i)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    x = data[:,0]*1000.0
+    y = data[:,1]
+    # Smooth the data with a gaussian filter
+    if gsmooth == 0:
+        gsmooth = max(int(nx/500),1)
+    if gsmooth is not None:
+        y = gaussian_filter1d(y, gsmooth)
+
+    # Find min and max values
+    ymin = np.amin(y)
+    ymax = np.amax(y)
+
+
+    # Find leading and trailing edges:
+    #
+    # Take the first `nmin` points starting from the left and compute a mean.
+    # This is the starting point for background.
+    # Then iterate towards the right. If the y value is higher than
+    # `threshold * (ymax - mean_background)` then this is the leading edge; if not
+    # the value is added to the background and we move to the next point.
+    #
+    # For the trailing edge, the same procedure is started from the right end and
+    # we iterate towards the left.
+    nmin = int(nx/50)
+    # Find leading background
+    background = y[0:nmin]
+    for i in range(nmin,nx):
+        if y[i] > bg_threshold*(ymax - np.average(background)):
+            i_start = i
             break
-
-    # Towards the left =======================
-    lmean = np.average(y[good_peaks[p-1]:good_peaks[p]])
-    if plot:
-        ax.plot([x[good_peaks[p-1]],x[good_peaks[p]]],[lmean,lmean],color='lime', lw=2)
-    # Find left edge iterating towards the right
-    for i in range(good_peaks[p]-1,good_peaks[p-1],-1):
-        if (y[i] - y[good_peaks[p]]) >= (win_threshold*(lmean-y[good_peaks[p]])):
-            redges.append(i)
+        else:
+            np.append(background,y[i])
+    # Find trailing background
+    background = y[-nmin-1:-1]
+    for i in range(nx-nmin,1,-1):
+        if y[i] > bg_threshold*(ymax - np.average(background)):
+            i_end = i
             break
+        else:
+            np.append(background,y[i])
+
+    # Determine minimum peak distance (mpd):
+    # We know there should be 6 windows between the leading and trailing edges.
+    # Since the windows have approximately all the same size, we can estimate a
+    # minimum peak distance to be close to the distance between leading and trailing
+    # edges divided by 6 (but slightly less to be on the safe side).
+    # Note that for the `detect_peaks` function, mpd is in units of data index, not
+    # time-of-flight.
+    mpd = int(0.75 * float(i_end - i_start) / nwindows)
+    print("The minimum peak distance (mpd) is:",mpd)
+    # Find valleys using `detect_peaks` function from Marcos Duarte
+    peaks = detect_peaks(y, mpd=mpd, valley=True)
+    # Now filter out peaks that are between start and end
+    good_peaks = [i_start]
+    for p in peaks:
+        if (p > i_start+mpd) and (p < i_end-mpd):
+            good_peaks.append(p)
+    good_peaks.append(i_end)
+    print("Number of valleys found:",len(good_peaks)-2)
+    if (len(good_peaks)-2) != (nwindows - 1):
+        print("Error: number of valleys should be %i!" % (nwindows-1))
 
 
-# Remember to append the global trailing edge
-redges.append(i_end)
+    # Now for each valley, iterate to one side starting from the valley center and
+    # find the window edge. We start from the first valley, which is the second
+    # element of the `good_peaks` array because the first is the global leading
+    # edge.
+    # We first iterate towards the right, to find the leading edge of the next
+    # window.
+    # The mean y value between this valley and the next one (`mean`) is computed.
+    # The window edge is the first value that exceeds the a fraction of the mean:
+    # `y > win_threshold * mean`.
 
-print("The frame boundaries are the following:")
-for i in range(len(ledges)):
-    print('{} --> {}'.format(x[ledges[i]],x[redges[i]]))
+    # Define left and right window edges
+    ledges = [i_start]
+    redges = []
 
-
-if plot:
-    colors = ["r","g","b","magenta","cyan","orange"]
-    for i in range(len(ledges)):
-        ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor=colors[i], alpha=0.5))
-    ax.plot(x, data[:,1], color="k", lw=2, label="Raw data")
-    ax.plot(x, y, color="lightgrey", lw=1, label="Smoothed data")
     for p in range(1,len(good_peaks)-1):
-        ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='r')
-    ax.plot(x[good_peaks[0]], y[good_peaks[0]], 'o', color="deepskyblue", label="Leading edge")
-    ax.plot(x[good_peaks[-1]], y[good_peaks[-1]], 'o', color="yellow", label="Trailing edge")
-    ax.set_xlabel("Time-of-flight")
-    ax.set_ylabel("Amplitude")
-    ax.set_ylim([0.0,1.05*np.amax(data[:,1])])
-    ax.plot(x[good_peaks[0]], -ymax, 'o', color='r',label="Valleys")
-    ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
-    ax.legend(loc=(0,1.02),ncol=3, fontsize=10)    
-    fig.savefig('figure.pdf',bbox_inches='tight')
+
+        # Towards the right ===================
+        rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
+        if plot:
+            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime', lw=2)
+        # Find left edge iterating towards the right
+        for i in range(good_peaks[p]+1,good_peaks[p+1]):
+            if (y[i] - y[good_peaks[p]]) >= (win_threshold*(rmean-y[good_peaks[p]])):
+                ledges.append(i)
+                break
+
+        # Towards the left =======================
+        lmean = np.average(y[good_peaks[p-1]:good_peaks[p]])
+        if plot:
+            ax.plot([x[good_peaks[p-1]],x[good_peaks[p]]],[lmean,lmean],color='lime', lw=2)
+        # Find left edge iterating towards the right
+        for i in range(good_peaks[p]-1,good_peaks[p-1],-1):
+            if (y[i] - y[good_peaks[p]]) >= (win_threshold*(lmean-y[good_peaks[p]])):
+                redges.append(i)
+                break
+
+
+    # Remember to append the global trailing edge
+    redges.append(i_end)
+
+    print("The frame boundaries are the following:")
+    for i in range(len(ledges)):
+        print('{}, {}'.format(x[ledges[i]],x[redges[i]]))
+
+    if plot:
+        colors = ["r","g","b","magenta","cyan","orange"]
+        for i in range(len(ledges)):
+            ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor=colors[i], alpha=0.5))
+        ax.plot(x, data[:,1], color="k", lw=2, label="Raw data")
+        ax.plot(x, y, color="lightgrey", lw=1, label="Smoothed data")
+        for p in range(1,len(good_peaks)-1):
+            ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='r')
+        ax.plot(x[good_peaks[0]], y[good_peaks[0]], 'o', color="deepskyblue", label="Leading edge")
+        ax.plot(x[good_peaks[-1]], y[good_peaks[-1]], 'o', color="yellow", label="Trailing edge")
+        ax.set_xlabel("Time-of-flight")
+        ax.set_ylabel("Amplitude")
+        ax.set_ylim([0.0,1.05*np.amax(data[:,1])])
+        ax.plot(x[good_peaks[0]], -ymax, 'o', color='r',label="Valleys")
+        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
+        ax.legend(loc=(0,1.02),ncol=3, fontsize=10)    
+        fig.savefig('figure.png',bbox_inches='tight')
+
+    return ledges, redges
