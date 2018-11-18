@@ -186,10 +186,15 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 #            of data points. If it is set to `None` then no smoothing is
 #            performed.
 #
-def get_wfm_windows(filename=None, nwindows=6, bg_threshold=0.05,
+def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
                     win_threshold=0.3, plot=True, gsmooth=0):
 
-    data = np.loadtxt(filename)
+
+    if data is None:
+        if filename is not None:
+            data = np.loadtxt(filename)
+        else:
+            raise RuntimeError("Either data or filename must be defined!")
     nx = np.shape(data)[0]
 
     if plot:
@@ -322,3 +327,47 @@ def get_wfm_windows(filename=None, nwindows=6, bg_threshold=0.05,
         fig.savefig('figure.png',bbox_inches='tight')
 
     return ledges, redges
+
+################################################################################
+################################################################################
+################################################################################
+
+if __name__ == '__main__':
+
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Automatically detect wave-frame multiplication windows')
+
+    parser.add_argument("-d", "--data", type=str, default=None, dest="data",
+                        help="the 2D data array to process")
+
+    parser.add_argument("-f", "--filename", type=str, default=None, dest="filename",
+                        help='the name of the file to process')
+
+    parser.add_argument("-n", "--nwindows", type=int, default=6, dest="nwindows",
+                        help='the number of windows to be found')
+
+    parser.add_argument("-b",'--bg-threshold', type=float, default=0.05, dest="bg_threshold",
+                        help='threshold above which we are no longer in'
+                        'background signal, as a percentage of (ymax - ymin).')
+
+    parser.add_argument("-w",'--win-threshold', type=float, default=0.3, dest="win_threshold",
+                        help='threshold to find window edge, as a percentage of'
+                        'average signal inside window.')
+
+    parser.add_argument("-g", "--gsmooth", type=int, default=0, dest="gsmooth",
+                        help='the width of the Gaussian kernel to smooth the data.'
+                        'If 0 (the default), then a guess is made based on the'
+                        'resolution of the data set. If None, then no smoothing is'
+                        'carried out.')
+
+    parser.add_argument("-p", '--plot', action="store_true",
+                        help='output the results to a plot')
+
+    options = parser.parse_args()
+
+    get_wfm_windows(data=options.data, filename=options.filename,
+                    nwindows=options.nwindows, bg_threshold=options.bg_threshold,
+                    win_threshold=options.win_threshold, gsmooth=options.gsmooth,
+                    plot=options.plot)
