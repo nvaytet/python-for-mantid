@@ -367,7 +367,10 @@ if __name__ == '__main__':
 
     options = parser.parse_args()
 
-    get_wfm_windows(data=options.data, filename=options.filename,
-                    nwindows=options.nwindows, bg_threshold=options.bg_threshold,
-                    win_threshold=options.win_threshold, gsmooth=options.gsmooth,
-                    plot=options.plot)
+    ledges, redges = get_wfm_windows(data=options.data,
+    	                             filename=options.filename,
+                                     nwindows=options.nwindows,
+                                     bg_threshold=options.bg_threshold,
+                                     win_threshold=options.win_threshold,
+                                     gsmooth=options.gsmooth,
+                                     plot=options.plot)
