@@ -1,8 +1,6 @@
 from __future__ import division, print_function
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
-from matplotlib.patches import Rectangle
 
 ################################################################################
 ################################################################################
@@ -10,18 +8,22 @@ from matplotlib.patches import Rectangle
 #
 # Wave-frame multiplication window edge finder
 #
-# Author: Neil Vaytet, European Spallation Source
+# Author: Neil Vaytet, European Spallation Source, <neil.vaytet@esss.se>
 # Date: 11/2018
 #
 #
-# This file contains two functions:
+# This file contains two functions (see individual function code for a list of
+# parameters):
+#
 # - detect_peaks(): A peak/valley finding routine provided by Marcos Duarte
-#                   (https://github.com/demotu/BMC).
+#                   (https://github.com/demotu/BMC). It was slightly modified
+#                   to disable the plotting functionalities.
+#
 # - get_wfm_windows(): Starting from the positions of the valleys, the edges of
 #                      WFM windows are found using various thresholds.
 #
 #
-# Examples of usage:
+# Examples:
 #
 # 1. Reading in a data file: the file must contain two columns: the first is TOF
 #    data (x) and the second is the amplitude (y). All other lines should be
@@ -78,7 +80,7 @@ from matplotlib.patches import Rectangle
 # __version__ = "1.0.5"
 # __license__ = "MIT"
 def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
-                 kpsh=False, valley=False, show=False, ax=None):
+                 kpsh=False, valley=False):
 
     """Detect peaks in data based on their amplitude and other features.
 
@@ -104,9 +106,6 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
         keep peaks with same height even if they are closer than `mpd`.
     valley : bool, optional (default = False)
         if True (1), detect valleys (local minima) instead of peaks.
-    show : bool, optional (default = False)
-        if True (1), plot data in matplotlib figure.
-    ax : a matplotlib.axes.Axes instance, optional (default = None).
 
     Returns
     -------
@@ -214,15 +213,6 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
         # remove the small peaks and sort back the indices by their occurrence
         ind = np.sort(ind[~idel])
 
-    if show:
-        if indnan.size:
-            x[indnan] = np.nan
-        if valley:
-            x = -x
-            if mph is not None:
-                mph = -mph
-        _plot(x, mph, mpd, threshold, edge, valley, ax, ind)
-
     return ind
 
 ################################################################################
@@ -245,7 +235,7 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 #
 # - plot: plot figure if True
 #
-# - gsmooth: width of gaussian Kernel to smooth the data with. If gmsooth = 0
+# - gsmooth: width of Gaussian kernel to smooth the data with. If gmsooth = 0
 #            (its default value), then a guess is performed based on the number
 #            of data points. If it is set to `None` then no smoothing is
 #            performed.
@@ -261,6 +251,8 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
     nx = np.shape(data)[0]
 
     if plot:
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Rectangle
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
