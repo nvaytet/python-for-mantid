@@ -45,15 +45,13 @@ from scipy.ndimage import gaussian_filter1d
 # 3. Changing the thresholds: there are two different thresholds.
 #
 #    - bg_threshold is used to find the global left and right edges of the
-#      signal over the background. To determine the background, we take the
-#      first `nmin = nx/50` points starting from the left and compute their mean
-#      y value. This is the starting point for the background. We then iterate
-#      towards the right. If the y value is higher than
-#      `bg_threshold * (ymax - mean_background)` (where ymax is the maximum y
-#      value in the entire data set), then this is the leading edge; if not the
-#      value is added to the background and we move to the next point.
-#      For the trailing edge, the same procedure is started from the right end
-#      and we iterate towards the left.
+#      signal over the background. To determine the background, we begin from
+#      the first (leftmost) point in the data and we iterate towards the right.
+#      This first point whose value exceeds
+#      `bg_threshold * (ymax - ymin)` (where `ymin` and `ymax` are the minimum
+#      and maximum y values in the entire data set) is selected as the leading
+#      edge. The trailing edge is found with the same procedure starting from
+#      the right end and we iterating towards the left.
 #      The default value is bg_threshold = 0.05.
 #
 #    - win_threshold is used to find the left and right edges of each pulse
@@ -270,31 +268,17 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
 
     # Find leading and trailing edges:
     #
-    # Take the first `nmin` points starting from the left and compute a mean.
-    # This is the starting point for background.
-    # Then iterate towards the right. If the y value is higher than
-    # `threshold * (ymax - mean_background)` then this is the leading edge; if not
-    # the value is added to the background and we move to the next point.
+    # Find the leftmost and rightmost points that exceed the value
+    # `bg_threshold * (ymax - ymin)
     #
-    # For the trailing edge, the same procedure is started from the right end and
-    # we iterate towards the left.
-    nmin = int(nx/50)
-    # Find leading background
-    background = y[0:nmin]
-    for i in range(nmin,nx):
-        if y[i] > bg_threshold*(ymax - np.average(background)):
+    for i in range(nx):
+        if y[i] > bg_threshold*(ymax - ymin):
             i_start = i
             break
-        else:
-            np.append(background,y[i])
-    # Find trailing background
-    background = y[-nmin-1:-1]
-    for i in range(nx-nmin,1,-1):
-        if y[i] > bg_threshold*(ymax - np.average(background)):
+    for i in range(nx-1,1,-1):
+        if y[i] > bg_threshold*(ymax - ymin):
             i_end = i
             break
-        else:
-            np.append(background,y[i])
 
     # Determine minimum peak distance (mpd):
     # We know there should be 6 windows between the leading and trailing edges.
