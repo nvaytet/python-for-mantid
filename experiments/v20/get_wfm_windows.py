@@ -4,6 +4,70 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 from matplotlib.patches import Rectangle
 
+################################################################################
+################################################################################
+################################################################################
+#
+# Wave-frame multiplication window edge finder
+#
+# Author: Neil Vaytet, European Spallation Source
+# Date: 11/2018
+#
+#
+# This file contains two functions:
+# - detect_peaks(): A peak/valley finding routine provided by Marcos Duarte
+#                   (https://github.com/demotu/BMC).
+# - get_wfm_windows(): Starting from the positions of the valleys, the edges of
+#                      WFM windows are found using various thresholds.
+#
+#
+# Examples of usage:
+#
+# 1. Reading in a data file: the file must contain two columns: the first is TOF
+#    data (x) and the second is the amplitude (y). All other lines should be
+#    commented with a '#' sign so that `np.loadtxt()` ignores them.
+#
+#    python get_wfm_windows.py --filename=spectrum.txt --plot
+#
+#    This will print the window edges to standard output and produce an image
+#    figure.pdf showing the different variables that were used to find the
+#    window limits.
+#
+#
+# 2. Calling from another python script: you must have a 2D array containing the
+#    x and y data.
+#
+#    left_edges, right_edges = get_wfm_windows(data=my_2D_data_array, plot=True)
+#
+#
+# 3. Changing the thresholds: there are two different thresholds.
+#
+#    - bg_threshold is used to find the global left and right edges of the
+#      signal over the background. To determine the background, we take the
+#      first `nmin = nx/50` points starting from the left and compute their mean
+#      y value. This is the starting point for the background. We then iterate
+#      towards the right. If the y value is higher than
+#      `bg_threshold * (ymax - mean_background)` (where ymax is the maximum y
+#      value in the entire data set), then this is the leading edge; if not the
+#      value is added to the background and we move to the next point.
+#      For the trailing edge, the same procedure is started from the right end
+#      and we iterate towards the left.
+#      The default value is bg_threshold = 0.05.
+#
+#    - win_threshold is used to find the left and right edges of each pulse
+#      frame. We iterate to one side starting from the valley center. We will
+#      first iterate towards the right, to find the leading edge of the next
+#      window. The mean y value between this valley and the next one (`mean`) is
+#      computed. The window edge is the first value that exceeds the a fraction
+#      of the mean: `y > win_threshold * mean`.
+#      The default value is win_threshold = 0.3.
+#
+#    python get_wfm_windows.py --filename=spectrum.txt --bg_threshold=0.1 \
+#        --win_threshold=0.5
+#
+################################################################################
+################################################################################
+################################################################################
 
 # Peak detection routine by Marcos Duarte
 #
@@ -187,8 +251,7 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 #            performed.
 #
 def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
-                    win_threshold=0.3, plot=True, gsmooth=0):
-
+                    win_threshold=0.3, plot=False, gsmooth=0):
 
     if data is None:
         if filename is not None:
@@ -212,7 +275,6 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
     # Find min and max values
     ymin = np.amin(y)
     ymax = np.amax(y)
-
 
     # Find leading and trailing edges:
     #
@@ -263,7 +325,6 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
     if (len(good_peaks)-2) != (nwindows - 1):
         print("Error: number of valleys should be %i!" % (nwindows-1))
 
-
     # Now for each valley, iterate to one side starting from the valley center and
     # find the window edge. We start from the first valley, which is the second
     # element of the `good_peaks` array because the first is the global leading
@@ -300,7 +361,6 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
                 redges.append(i)
                 break
 
-
     # Remember to append the global trailing edge
     redges.append(i_end)
 
@@ -323,8 +383,8 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
         ax.set_ylim([0.0,1.05*np.amax(data[:,1])])
         ax.plot(x[good_peaks[0]], -ymax, 'o', color='r',label="Valleys")
         ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
-        ax.legend(loc=(0,1.02),ncol=3, fontsize=10)    
-        fig.savefig('figure.png',bbox_inches='tight')
+        ax.legend(loc=(0,1.02),ncol=3, fontsize=10)
+        fig.savefig('figure.pdf',bbox_inches='tight')
 
     return ledges, redges
 
