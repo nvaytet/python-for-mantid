@@ -248,12 +248,6 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
             raise RuntimeError("Either data or filename must be defined!")
     nx = np.shape(data)[0]
 
-    if plot:
-        import matplotlib.pyplot as plt
-        from matplotlib.patches import Rectangle
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-
     x = data[:,0]*1000.0
     y = data[:,1]
     # Smooth the data with a gaussian filter
@@ -319,8 +313,6 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
 
         # Towards the right ===================
         rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
-        if plot:
-            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime', lw=2)
         # Find left edge iterating towards the right
         for i in range(good_peaks[p]+1,good_peaks[p+1]):
             if (y[i] - y[good_peaks[p]]) >= (win_threshold*(rmean-y[good_peaks[p]])):
@@ -329,8 +321,6 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
 
         # Towards the left =======================
         lmean = np.average(y[good_peaks[p-1]:good_peaks[p]])
-        if plot:
-            ax.plot([x[good_peaks[p-1]],x[good_peaks[p]]],[lmean,lmean],color='lime', lw=2)
         # Find left edge iterating towards the right
         for i in range(good_peaks[p]-1,good_peaks[p-1],-1):
             if (y[i] - y[good_peaks[p]]) >= (win_threshold*(lmean-y[good_peaks[p]])):
@@ -345,11 +335,23 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
         print('{}, {}'.format(x[ledges[i]],x[redges[i]]))
 
     if plot:
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Rectangle
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
         colors = ["r","g","b","magenta","cyan","orange"]
         for i in range(len(ledges)):
             ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor=colors[i], alpha=0.5))
+        for p in range(len(good_peaks)-1):
+            rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
+            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime', lw=2)
+            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[win_threshold*rmean,win_threshold*rmean], color='sienna', lw=2)
+        bg = bg_threshold*(ymax - ymin)
         ax.plot(x, data[:,1], color="k", lw=2, label="Raw data")
         ax.plot(x, y, color="lightgrey", lw=1, label="Smoothed data")
+        ax.plot([np.amin(x),np.amax(x)], [bg, bg], "--", color="pink", lw=1, label="Background threshold")
+        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
+        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='sienna', label="Window mean", lw=2)
         for p in range(1,len(good_peaks)-1):
             ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='r')
         ax.plot(x[good_peaks[0]], y[good_peaks[0]], 'o', color="deepskyblue", label="Leading edge")
@@ -358,8 +360,7 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
         ax.set_ylabel("Amplitude")
         ax.set_ylim([0.0,1.05*np.amax(data[:,1])])
         ax.plot(x[good_peaks[0]], -ymax, 'o', color='r',label="Valleys")
-        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
-        ax.legend(loc=(0,1.02),ncol=3, fontsize=10)
+        ax.legend(loc=(0,1.02),ncol=4, fontsize=7)
         fig.savefig('figure.pdf',bbox_inches='tight')
 
     return ledges, redges
