@@ -15,12 +15,12 @@ from scipy.ndimage import gaussian_filter1d
     This file contains two functions (see individual function code for a list of
     parameters):
 
-    - detect_peaks(): A peak/valley finding routine provided by Marcos Duarte
-                      (https://github.com/demotu/BMC). It was slightly modified
-                      to disable the plotting functionalities.
+    - detectPeaks(): A peak/valley finding routine provided by Marcos Duarte
+                     (https://github.com/demotu/BMC). It was slightly modified
+                     to disable the plotting functionalities.
 
-    - get_wfm_windows(): Starting from the positions of the valleys, the edges
-                         of WFM windows are found using various thresholds.
+    - getWFMWindows(): Starting from the positions of the valleys, the edges
+                       of WFM windows are found using various thresholds.
 
 
     Examples:
@@ -40,7 +40,7 @@ from scipy.ndimage import gaussian_filter1d
     2. Calling from another python script: you must have a 2D array containing
        the x and y data.
 
-       left_edges, right_edges = get_wfm_windows(data=my_2D_data_array, plot=True)
+       left_edges, right_edges = getWFMWindows(data=my_2D_data_array, plot=True)
 
 
     3. Changing the thresholds: there are two different thresholds.
@@ -80,7 +80,7 @@ from scipy.ndimage import gaussian_filter1d
 # __author__ = "Marcos Duarte, https://github.com/demotu/BMC"
 # __version__ = "1.0.5"
 # __license__ = "MIT"
-def detect_peaks(x, mph=None, mpd=1, threshold=0, edge="rising",
+def detectPeaks(x, mph=None, mpd=1, threshold=0, edge="rising",
                  kpsh=False, valley=False):
 
     """Detect peaks in data based on their amplitude and other features.
@@ -216,7 +216,7 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge="rising",
 
     return ind
 
-def check_peaks(peaks, nwindows):
+def checkPeaks(peaks, nwindows):
     # print("Number of valleys found:", len(peaks)-2)
     nvalleys = len(peaks)-2
     if nvalleys != (nwindows - 1):
@@ -269,7 +269,7 @@ def check_peaks(peaks, nwindows):
                                     the indices (NOT the Tof values) of the left
                                     and right edges as arrays of values.
 """
-def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
+def getWFMWindows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
                     win_threshold=0.3, plot=False, gsmooth=0, xrange=None,
                     rebin_step_for_string_output=None):
 
@@ -330,21 +330,21 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
     # Since the windows have approximately all the same size, we can estimate a
     # minimum peak distance to be close to the distance between leading and trailing
     # edges divided by 6 (but slightly less to be on the safe side).
-    # Note that for the `detect_peaks` function, mpd is in units of data index, not
+    # Note that for the `detectPeaks` function, mpd is in units of data index, not
     # time-of-flight.
     mpd = int(0.75 * float(i_end - i_start) / nwindows)
     loop = True
     while loop:
         print("The minimum peak distance (mpd) is:",mpd)
-        # Find valleys using `detect_peaks` function from Marcos Duarte
-        peaks = detect_peaks(y, mpd=mpd, valley=True)
+        # Find valleys using `detectPeaks` function from Marcos Duarte
+        peaks = detectPeaks(y, mpd=mpd, valley=True)
         # Now filter out peaks that are between start and end
         good_peaks = [i_start]
         for p in peaks:
             if (p > i_start+0.25*mpd) and (p < i_end-0.25*mpd):
                 good_peaks.append(p)
         good_peaks.append(i_end)
-        loop = check_peaks(good_peaks, nwindows)
+        loop = checkPeaks(good_peaks, nwindows)
 
         # Try to remove peaks of there are too many
         if (len(good_peaks)-2) > (nwindows - 1):
@@ -363,7 +363,7 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
             for p in range(len(temp_peaks)):
                 if temp_peaks[p] != -100:
                     good_peaks.append(temp_peaks[p])
-            loop = check_peaks(good_peaks, nwindows)
+            loop = checkPeaks(good_peaks, nwindows)
 
         # Try to reduce the minimum peak distance if there are too few peaks
         if (len(good_peaks)-2) < (nwindows - 1):
@@ -446,7 +446,7 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
         return output
     # If not, the indices of the edges are returned, NOT the Tof values
     else:
-        return ledges, redges
+        return [ledges, redges]
 
 ################################################################################
 ################################################################################
@@ -509,11 +509,12 @@ if __name__ == "__main__":
 
     options = parser.parse_args()
 
-    ledges, redges = get_wfm_windows(data=options.data,
-    	                             filename=options.filename,
-                                     nwindows=options.nwindows,
-                                     bg_threshold=options.bg_threshold,
-                                     win_threshold=options.win_threshold,
-                                     gsmooth=options.gsmooth,
-                                     xrange=options.xrange,
-                                     plot=options.plot)
+    output = getWFMWindows(data=options.data,
+                           filename=options.filename,
+                           nwindows=options.nwindows,
+                           bg_threshold=options.bg_threshold,
+                           win_threshold=options.win_threshold,
+                           gsmooth=options.gsmooth,
+                           xrange=options.xrange,
+                           rebin_step_for_string_output=options.rebin_step_for_string_output,
+                           plot=options.plot)
