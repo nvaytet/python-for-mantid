@@ -80,7 +80,7 @@ from scipy.ndimage import gaussian_filter1d
 # __author__ = "Marcos Duarte, https://github.com/demotu/BMC"
 # __version__ = "1.0.5"
 # __license__ = "MIT"
-def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
+def detect_peaks(x, mph=None, mpd=1, threshold=0, edge="rising",
                  kpsh=False, valley=False):
 
     """Detect peaks in data based on their amplitude and other features.
@@ -162,7 +162,7 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 
     """
 
-    x = np.atleast_1d(x).astype('float64')
+    x = np.atleast_1d(x).astype("float64")
     if x.size < 3:
         return np.array([], dtype=int)
     if valley:
@@ -180,9 +180,9 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
     if not edge:
         ine = np.where((np.hstack((dx, 0)) < 0) & (np.hstack((0, dx)) > 0))[0]
     else:
-        if edge.lower() in ['rising', 'both']:
+        if edge.lower() in ["rising", "both"]:
             ire = np.where((np.hstack((dx, 0)) <= 0) & (np.hstack((0, dx)) > 0))[0]
-        if edge.lower() in ['falling', 'both']:
+        if edge.lower() in ["falling", "both"]:
             ife = np.where((np.hstack((dx, 0)) < 0) & (np.hstack((0, dx)) >= 0))[0]
     ind = np.unique(np.hstack((ine, ire, ife)))
     # handle NaN's
@@ -256,9 +256,22 @@ def check_peaks(peaks, nwindows):
               these bounds is ignored. You can set one of the limits to None
               if you want to have no limit on that end.
               For example: xrange=(1000,55000) or xrange=[5000,None]
+
+    - rebin_step_for_string_output: a number. If specified, the function will
+                                    return an array of strings that are to be
+                                    used as the input for the Rebin algorithm.
+                                    The number given as an argument will appear
+                                    as the bin step in the middle of each range.
+                                    For example, if the number supplied is 64,
+                                    the output will look like:
+                                    ['15000,64,20000', '25000,64,30000', ...]
+                                    If unspecified, the function will return
+                                    the indices (NOT the Tof values) of the left
+                                    and right edges as arrays of values.
 """
 def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
-                    win_threshold=0.3, plot=False, gsmooth=0, xrange=None):
+                    win_threshold=0.3, plot=False, gsmooth=0, xrange=None,
+                    rebin_step_for_string_output=None):
 
     if data is None:
         if filename is not None:
@@ -394,7 +407,7 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
 
     print("The frame boundaries are the following:")
     for i in range(len(ledges)):
-        print('{}, {}'.format(x[ledges[i]],x[redges[i]]))
+        print("{}, {}".format(x[ledges[i]],x[redges[i]]))
 
     if plot:
         import matplotlib.pyplot as plt
@@ -406,71 +419,93 @@ def get_wfm_windows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
             ax.add_patch(Rectangle((x[ledges[i]], ymin), (x[redges[i]]-x[ledges[i]]), (ymax-ymin), facecolor=colors[i%5], alpha=0.5))
         for p in range(len(good_peaks)-1):
             rmean = np.average(y[good_peaks[p]:good_peaks[p+1]])
-            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color='lime', lw=2)
-            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[win_threshold*rmean,win_threshold*rmean], color='sienna', lw=2)
+            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[rmean,rmean],color="lime", lw=2)
+            ax.plot([x[good_peaks[p]],x[good_peaks[p+1]]],[win_threshold*rmean,win_threshold*rmean], color="sienna", lw=2)
         bg = bg_threshold*(ymax - ymin)
         ax.plot(x, data[:,1], color="k", lw=2, label="Raw data")
         ax.plot(x, y, color="lightgrey", lw=1, label="Smoothed data")
         ax.plot([np.amin(x),np.amax(x)], [bg, bg], "--", color="pink", lw=1, label="Background threshold")
-        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='lime', label="Window mean", lw=2)
-        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color='sienna', label="Window mean", lw=2)
+        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color="lime", label="Window mean", lw=2)
+        ax.plot([x[good_peaks[0]],x[good_peaks[1]]], [-ymax,-ymax], color="sienna", label="Window mean", lw=2)
         for p in range(1,len(good_peaks)-1):
-            ax.plot(x[good_peaks[p]], y[good_peaks[p]], 'o', color='r')
-        ax.plot(x[good_peaks[0]], y[good_peaks[0]], 'o', color="deepskyblue", label="Leading edge")
-        ax.plot(x[good_peaks[-1]], y[good_peaks[-1]], 'o', color="yellow", label="Trailing edge")
+            ax.plot(x[good_peaks[p]], y[good_peaks[p]], "o", color="r")
+        ax.plot(x[good_peaks[0]], y[good_peaks[0]], "o", color="deepskyblue", label="Leading edge")
+        ax.plot(x[good_peaks[-1]], y[good_peaks[-1]], "o", color="yellow", label="Trailing edge")
         ax.set_xlabel("Time-of-flight")
         ax.set_ylabel("Amplitude")
         ax.set_ylim([0.0,1.05*np.amax(data[:,1])])
-        ax.plot(x[good_peaks[0]], -ymax, 'o', color='r',label="Valleys")
+        ax.plot(x[good_peaks[0]], -ymax, "o", color="r",label="Valleys")
         ax.legend(loc=(0,1.02),ncol=4, fontsize=7)
-        fig.savefig('figure.pdf',bbox_inches='tight')
+        fig.savefig("figure.pdf",bbox_inches="tight")
 
-    return ledges, redges
+    # If we want output in Rebin format, then construct the array of strings
+    if rebin_step_for_string_output is not None:
+        output = []
+        for i in range(len(ledges)):
+            output.append("{},{},{}".format(x[ledges[i]],rebin_step_for_string_output,x[redges[i]]))
+        return output
+    # If not, the indices of the edges are returned, NOT the Tof values
+    else:
+        return ledges, redges
 
 ################################################################################
 ################################################################################
 ################################################################################
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Automatically detect wave-frame multiplication windows')
+        description="Automatically detect wave-frame multiplication windows")
 
     parser.add_argument("-d", "--data", type=str, default=None, dest="data",
                         help="the 2D data array to process")
 
     parser.add_argument("-f", "--filename", type=str, default=None, dest="filename",
-                        help='the name of the file to process')
+                        help="the name of the file to process")
 
     parser.add_argument("-n", "--nwindows", type=int, default=6, dest="nwindows",
-                        help='the number of windows to be found')
+                        help="the number of windows to be found")
 
-    parser.add_argument("-b",'--bg-threshold', type=float, default=0.05, dest="bg_threshold",
-                        help='threshold above which we are no longer in'
-                        'background signal, as a percentage of (ymax - ymin).')
+    parser.add_argument("-b","--bg-threshold", type=float, default=0.05, dest="bg_threshold",
+                        help="threshold above which we are no longer in"
+                        "background signal, as a percentage of (ymax - ymin).")
 
-    parser.add_argument("-w",'--win-threshold', type=float, default=0.3, dest="win_threshold",
-                        help='threshold to find window edge, as a percentage of'
-                        'average signal inside window.')
+    parser.add_argument("-w","--win-threshold", type=float, default=0.3, dest="win_threshold",
+                        help="threshold to find window edge, as a percentage of"
+                        "average signal inside window.")
 
     parser.add_argument("-g", "--gsmooth", type=int, default=0, dest="gsmooth",
-                        help='the width of the Gaussian kernel to smooth the'
-                        'data. If 0 (the default), then a guess is made based'
-                        'on the resolution of the data set. If None, then no'
-                        'smoothing is carried out.')
+                        help="the width of the Gaussian kernel to smooth the"
+                        "data. If 0 (the default), then a guess is made based"
+                        "on the resolution of the data set. If None, then no"
+                        "smoothing is carried out.")
 
     parser.add_argument("-x", "--xrange", default=None, dest="xrange",
-                        help='an array or tuple containing 2 elements which are'
-                        'the start and end TOF values to be considered for'
-                        'analysis. The data outside these bounds is ignored.'
-                        'You can set one of the limits to None if you want to'
-                        'have no limit on that end. For example:'
-                        'xrange=(1000,55000) or xrange=[5000,None].')
+                        help="an array or tuple containing 2 elements which are"
+                        "the start and end TOF values to be considered for"
+                        "analysis. The data outside these bounds is ignored."
+                        "You can set one of the limits to None if you want to"
+                        "have no limit on that end. For example:"
+                        "xrange=(1000,55000) or xrange=[5000,None].")
 
-    parser.add_argument("-p", '--plot', action="store_true",
-                        help='output the results to a plot')
+    parser.add_argument("-p", "--plot", action="store_true",
+                        help="output the results to a plot")
+
+    parser.add_argument("-r", "--rebin-step-for-string-output", type=str, default=None,
+                        dest="rebin_step_for_string_output",
+                        help="a number. If specified, the function will"
+                             "return an array of strings that are to be"
+                             "used as the input for the Rebin algorithm."
+                             "The number given as an argument will appear"
+                             "as the bin step in the middle of each range."
+                             "For example, if the number supplied is 64,"
+                             "the output will look like:"
+                             "['15000,64,20000', '25000,64,30000', ...]"
+                             "If unspecified, the function will return"
+                             "the indices (NOT the Tof values) of the left"
+                             "and right edges as arrays of values.")
 
     options = parser.parse_args()
 
