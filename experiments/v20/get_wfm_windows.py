@@ -217,7 +217,9 @@ def detectPeaks(x, mph=None, mpd=1, threshold=0, edge="rising",
     return ind
 
 def checkPeaks(peaks, nwindows):
-    # print("Number of valleys found:", len(peaks)-2)
+    """
+    This function check if the number of peaks found is the correct one.
+    """
     nvalleys = len(peaks)-2
     if nvalleys != (nwindows - 1):
         print("Error: number of valleys should be {}! Found {}.".format(nwindows-1, nvalleys))
@@ -230,7 +232,12 @@ def checkPeaks(peaks, nwindows):
 ################################################################################
 ################################################################################
 
-""" Get the left and right edges of wave-frame multiplication windows.
+def getWFMWindows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
+                    win_threshold=0.3, plot=False, gsmooth=0, xrange=None,
+                    rebin_step_for_string_output=None):
+
+    """
+    Get the left and right edges of wave-frame multiplication windows.
 
     The parameters are:
 
@@ -268,10 +275,7 @@ def checkPeaks(peaks, nwindows):
                                     If unspecified, the function will return
                                     the indices (NOT the Tof values) of the left
                                     and right edges as arrays of values.
-"""
-def getWFMWindows(data=None, filename=None, nwindows=6, bg_threshold=0.05,
-                    win_threshold=0.3, plot=False, gsmooth=0, xrange=None,
-                    rebin_step_for_string_output=None):
+    """
 
     if data is None:
         if filename is not None:
